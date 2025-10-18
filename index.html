@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Line Chart Generator - Index</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #chart-container {
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            margin-top: 20px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #data-label {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        /* Style for SVG elements */
+        #dynamic-chart path {
+            fill: none;
+            stroke: #33a;
+            stroke-width: 3;
+            /* Optional transition for smooth updates */
+            transition: all 0.5s ease-out;
+        }
+        #dynamic-chart circle {
+            fill: #33a;
+            stroke: white;
+            stroke-width: 2;
+            cursor: help;
+        }
+        #dynamic-chart text.axis-title {
+            fill: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Line Chart SVG Generator</h1>
+
+    <label for="data-input">Enter Performance Data (Vlines/s, comma-separated):</label>
+    <input type="text" id="data-input" value="12000, 13500, 14000, 12500, 15000" oninput="generateChart()">
+
+    <div id="chart-container">
+        <svg id="dynamic-chart" width="100%" height="400" viewBox="0 0 1000 400" preserveAspectRatio="none">
+            <text x="500" y="200" dominant-baseline="middle" text-anchor="middle" fill="#888">Enter data above to generate the chart.</text>
+        </svg>
+    </div>
+
+    <div id="data-label">Attempts: 0 | Min Value: 0 | Max Value: 0</div>
+
+    <script>
+        // --- SVG Constants ---
+        const SVG_WIDTH = 1000;
+        const SVG_HEIGHT = 400;
+        const PADDING = 50; // Space reserved for axes and labels
+
+        /**
+         * Parses input, calculates scales, and generates the SVG Line Chart.
+         */
+        function generateChart() {
+            const input = document.getElementById('data-input').value;
+            const svg = document.getElementById('dynamic-chart');
+            const label = document.getElementById('data-label');
+
+            // 1. Data Parsing
+            const dataPoints = input
+                .split(',')
+                .map(s => {
+                    const num = parseInt(s.trim(), 10);
+                    return isNaN(num) || num < 0 ? null : num;
+                })
+                .filter(n => n !== null); // Array of valid, non-negative numbers
+
+            svg.innerHTML = ''; // Clear previous chart content
+
+            if (dataPoints.length < 2) {
+                // Handle insufficient data
+                svg.innerHTML = `<text x="${SVG_WIDTH / 2}" y="${SVG_HEIGHT / 2}" dominant-baseline="middle" text-anchor="middle" fill="#888">Enter at least two data points.</text>`;
+                label.textContent = `Attempts: ${dataPoints.length} | Min Value: 0 | Max Value: 0`;
+                return;
+            }
+
+            // --- 2. Calculations and Scaling ---
+            const numPoints = dataPoints.length;
+            const minValue = 0; // Fixed lowest expected value
+            const maxValue = Math.max(...dataPoints);
+            const rangeY = maxValue - minValue;
+
+            // Update stats label
+            label.textContent = `Attempts: ${numPoints} | Min Value: ${minValue} | Max Value: ${maxValue}`;
+
+            // Define the drawable area for the data path
+            const chartAreaWidth = SVG_WIDTH - 2 * PADDING;
+            const chartAreaHeight = SVG_HEIGHT - 2 * PADDING;
+
+            // Scaling factors
+            const scaleX = chartAreaWidth / (numPoints - 1);
+            const scaleY = chartAreaHeight / (rangeY || 1); // Avoid division by zero
+
+            let pathD = ""; // SVG Path definition string (M x1 y1 L x2 y2...)
+            let pointsHTML = ""; // HTML for circle markers
+
+            // 3. Draw Axes (simplified)
+            // X-axis (Benchmark Attempt)
+            svg.innerHTML += `<line x1="${PADDING}" y1="${SVG_HEIGHT - PADDING}" x2="${SVG_WIDTH - PADDING}" y2="${SVG_HEIGHT - PADDING}" stroke="#888" stroke-width="2" />`;
+            // Y-axis (Vlines/s)
+            svg.innerHTML += `<line x1="${PADDING}" y1="${PADDING}" x2="${PADDING}" y2="${SVG_HEIGHT - PADDING}" stroke="#888" stroke-width="2" />`;
+
+            // 4. Generate Path and Points
+            dataPoints.forEach((value, index) => {
+                // X position: Maps index (attempt) to chart width
+                const x = PADDING + index * scaleX;
+                // Y position: Maps value to chart height (inverted for SVG)
+                const y = SVG_HEIGHT - PADDING - (value - minValue) * scaleY;
+
+                // Path construction (M: MoveTo, L: LineTo)
+                if (index === 0) {
+                    pathD += `M ${x} ${y}`;
+                } else {
+                    pathD += ` L ${x} ${y}`;
+                }
+
+                // Add Circle Marker with Tooltip (<title> provides native hover text)
+                pointsHTML += `
+                    <circle cx="${x}" cy="${y}" r="5">
+                        <title>Attempt: ${index + 1}\nVlines/s: ${value}</title>
+                    </circle>
+                `;
+            });
+
+            // 5. Insert Path and Points (Path inserted first)
+            svg.innerHTML += `<path d="${pathD}" class="data-line" />`;
+            svg.innerHTML += pointsHTML;
+
+            // 6. Draw Axis Labels
+
+            // Y-axis Labels (Max and Min values)
+            svg.innerHTML += `<text x="${PADDING - 10}" y="${PADDING}" text-anchor="end" dominant-baseline="central" font-size="18">${maxValue}</text>`;
+            svg.innerHTML += `<text x="${PADDING - 10}" y="${SVG_HEIGHT - PADDING}" text-anchor="end" dominant-baseline="central" font-size="18">${minValue}</text>`;
+
+            // X-axis Labels (First and Last Attempt)
+            svg.innerHTML += `<text x="${PADDING}" y="${SVG_HEIGHT - PADDING + 20}" text-anchor="middle" dominant-baseline="hanging" font-size="18">1</text>`;
+            if (numPoints > 1) {
+                 svg.innerHTML += `<text x="${SVG_WIDTH - PADDING}" y="${SVG_HEIGHT - PADDING + 20}" text-anchor="middle" dominant-baseline="hanging" font-size="18">${numPoints}</text>`;
+            }
+
+            // Axis Titles
+            svg.innerHTML += `<text x="${PADDING - 30}" y="${SVG_HEIGHT / 2}" dominant-baseline="central" text-anchor="middle" transform="rotate(-90 ${PADDING - 30} ${SVG_HEIGHT / 2})" font-size="20" font-weight="bold" class="axis-title">Magnitude</text>`;
+            svg.innerHTML += `<text x="${SVG_WIDTH / 2}" y="${SVG_HEIGHT - 10}" dominant-baseline="central" text-anchor="middle" font-size="20" font-weight="bold" class="axis-title">Chronological Index</text>`;
+        }
+
+        // Initialize the chart on page load with the default input data
+        window.onload = generateChart;
+    </script>
+</body>
+</html>
